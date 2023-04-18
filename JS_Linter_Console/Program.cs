@@ -55,7 +55,7 @@ namespace JS_Linter_Console
                     if (linterResults.HasErrorsOrWarnings)
                     {
                         string timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                        string outputFile = Path.Combine(logsDirectory, $"linter_errors_{websiteName}_{timestamp}.txt");
+                        string outputFile = Path.Combine(logsDirectory, $"{websiteName}_{timestamp}.txt");
                         await File.WriteAllTextAsync(outputFile, linterResults.Output);
                         Console.WriteLine($"Linter issues found for {websiteName} and written to {outputFile}");
 
@@ -90,6 +90,7 @@ namespace JS_Linter_Console
                 Console.WriteLine($"Processing file {progress}/{totalFiles}: {jsFile}");
 
                 var rawErrors = await LintJavaScriptFileAsync(jsFile);
+                Console.WriteLine();
                 var errors = ParseLinterOutput(rawErrors);
                 if (errors.HasErrorsOrWarnings)
                 {
@@ -131,10 +132,12 @@ namespace JS_Linter_Console
 
         private static async Task<string> LintJavaScriptFileAsync(string filePath)
         {
+            string projectRoot = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".."));
+            string configFilePath = Path.Combine(projectRoot, ".eslintrc.json");
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/C eslint \"{filePath}\" --no-color --rule no-undef:error",
+                Arguments = $"/C eslint \"{filePath}\" --no-color --rule no-undef:error --config \"{configFilePath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

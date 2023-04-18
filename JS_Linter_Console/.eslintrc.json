@@ -1,0 +1,29 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 12,
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-mixed-spaces-and-tabs": "off"
+  },
+  "globals": {
+    "CKEDITOR": "readonly",
+    "require": "readonly",
+    "require2": "readonly",
+    "document": "readonly",
+    "USC": "readonly",
+    "google": "readonly",
+    "$": "readonly",
+    "Make": "readonly",
+    "rrequire": "readonly",
+    "window": "readonly",
+    "console": "readonly",
+    "URI":  "readonly"
+  }
+}
