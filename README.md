@@ -4,7 +4,7 @@ This C# console application scans multiple websites for JavaScript linting issue
 
 ## Key Features
 
-- Takes user input for the directory containing websites to scan (e.g., `C:\inetpub`).
+- Takes user input for the directory containing websites to scan (e.g., `Z:\inetpub`).
 - Identifies JavaScript files with linting errors using ESLint and Node.js.
 - Generates a unique, timestamped text file containing linting errors for each website in the "linter_error_logs" folder.
 - Provides a clear overview of linting issues in the console output, helping developers and administrators maintain better code quality.
