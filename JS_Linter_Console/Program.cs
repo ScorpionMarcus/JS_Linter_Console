@@ -9,98 +9,114 @@ namespace JS_Linter_Console
 {
     class Program
     {
+        private const string LogFileName = "linter_app_log.txt";
+
         static async Task Main(string[] args)
         {
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-            Console.Write("Please enter the path to the websites folder: ");
-            string? websitesPath = Console.ReadLine();
-
-            if (!string.IsNullOrWhiteSpace(websitesPath))
+            try
             {
-                await LintAllWebsitesAsync(websitesPath);
+                Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+                string? choice = GetValidChoice();
+
+                Console.Write($"Please enter the path to the {(choice == "1" ? "single website" : "folder containing multiple websites")}: ");
+                string? path = Console.ReadLine();
+
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    await LintWebsitesAsync(path, choice == "1");
+                }
+                else
+                {
+                    Console.WriteLine("Invalid path provided. Exiting...");
+                    Log("Invalid path provided.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("Invalid path provided. Exiting...");
+                Console.WriteLine("An error occurred during execution:");
+                Console.WriteLine(ex.Message);
+                Console.WriteLine("Exiting...");
+                Log($"An error occurred during execution: {ex.Message}");
             }
         }
 
-        private static async Task LintAllWebsitesAsync(string websitesPath)
+        private static string GetValidChoice()
         {
-            var directories = Directory.GetDirectories(websitesPath);
-            Console.WriteLine($"Checking {directories.Length} directories...");
+            string? choice;
+            do
+            {
+                Console.Write("Choose an option:\n1. Lint a single website\n2. Lint multiple websites in a folder\nEnter 1 or 2: ");
+                choice = Console.ReadLine();
+            } while (choice != "1" && choice != "2");
+
+            return choice;
+        }
+
+        private static async Task LintWebsitesAsync(string path, bool isSingleWebsite)
+        {
+            var directories = isSingleWebsite ? new string[] { path } : Directory.GetDirectories(path);
+            Console.WriteLine($"Checking {directories.Length} {(isSingleWebsite ? "website" : "directories")}...");
 
             int totalErrors = 0;
             int totalWarnings = 0;
-            int progress = 0;
 
             string logsDirectory = "linter_error_logs";
-            if (!Directory.Exists(logsDirectory))
-            {
-                Directory.CreateDirectory(logsDirectory);
-            }
+            Directory.CreateDirectory(logsDirectory);
 
-            foreach (var directory in directories)
+            foreach (var (directory, progress) in directories.Select((dir, idx) => (dir, idx + 1)))
             {
                 var wwwDirectory = Path.Combine(directory, "www");
-                if (Directory.Exists(wwwDirectory))
-                {
-                    progress++;
-                    Console.WriteLine($"[{progress}/{directories.Length}] Processing: {directory}");
+                if (!Directory.Exists(wwwDirectory)) continue;
 
-                    var websiteName = Path.GetFileName(directory);
-                    var linterResults = await LintWebsiteAsync(wwwDirectory);
+                Console.WriteLine($"[{progress}/{directories.Length}] Processing: {directory}");
+                var websiteName = Path.GetFileName(directory);
 
-                    if (linterResults.HasErrorsOrWarnings)
-                    {
-                        string timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                        string outputFile = Path.Combine(logsDirectory, $"{websiteName}_{timestamp}.txt");
-                        await File.WriteAllTextAsync(outputFile, linterResults.Output);
-                        Console.WriteLine($"Linter issues found for {websiteName} and written to {outputFile}");
+                Console.WriteLine("Connecting to website...");
+                var linterResults = await LinterAsync(wwwDirectory);
 
-                        totalErrors += linterResults.TotalErrors;
-                        totalWarnings += linterResults.TotalWarnings;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"No Linter issues found for {websiteName}.");
-                    }
-                }
+                if (!linterResults.HasErrorsOrWarnings) continue;
+
+                string timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                string outputFile = Path.Combine(logsDirectory, $"{websiteName}_{timestamp}.txt");
+                await File.WriteAllTextAsync(outputFile, linterResults.Output);
+                Console.WriteLine($"Linter issues found for {websiteName} and written to {outputFile}");
+
+                totalErrors += linterResults.TotalErrors;
+                totalWarnings += linterResults.TotalWarnings;
             }
 
             Console.WriteLine("\nProcess completed.");
             Console.WriteLine($"Total errors: {totalErrors}");
             Console.WriteLine($"Total warnings: {totalWarnings}");
+
+            string websitesLinted = string.Join(", ", directories.Select(directory => Path.GetFileName(directory)));
+            Log($"{(isSingleWebsite ? "Single" : "Multiple")} website linting completed for {websitesLinted}. Total errors: {totalErrors}, Total warnings: {totalWarnings}");
         }
 
-        private static async Task<LinterResult> LintWebsiteAsync(string wwwDirectory)
+        private static async Task<LinterResult> LinterAsync(string wwwDirectory)
         {
             var lintErrors = "";
             int totalErrors = 0;
             int totalWarnings = 0;
             var jsFiles = GetJavaScriptFiles(wwwDirectory);
-
             int totalFiles = jsFiles.Count;
-            int progress = 0;
 
-            foreach (var jsFile in jsFiles)
+            foreach (var (jsFile, progress) in jsFiles.Select((file, idx) => (file, idx + 1)))
             {
-                progress++;
                 Console.WriteLine($"Processing file {progress}/{totalFiles}: {jsFile}");
 
                 var rawErrors = await LintJavaScriptFileAsync(jsFile);
                 Console.WriteLine();
                 var errors = ParseLinterOutput(rawErrors);
-                if (errors.HasErrorsOrWarnings)
-                {
-                    totalErrors += errors.TotalErrors;
-                    totalWarnings += errors.TotalWarnings;
+                if (!errors.HasErrorsOrWarnings) continue;
 
-                    lintErrors += $"File: {jsFile} - Errors: {errors.TotalErrors}, Warnings: {errors.TotalWarnings}\n";
-                    lintErrors += errors.Output;
-                    lintErrors += "\n\n";
-                }
+                totalErrors += errors.TotalErrors;
+                totalWarnings += errors.TotalWarnings;
+
+                lintErrors += $"File: {jsFile} - Errors: {errors.TotalErrors}, Warnings: {errors.TotalWarnings}\n";
+                lintErrors += errors.Output;
+                lintErrors += "\n\n";
             }
 
             return new LinterResult
@@ -137,7 +153,7 @@ namespace JS_Linter_Console
             var processStartInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/C eslint \"{filePath}\" --no-color --rule no-undef:error --config \"{configFilePath}\"",
+                Arguments = $"/C eslint \"{filePath}\" --fix --no-color --rule no-undef:error --config \"{configFilePath}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -159,6 +175,18 @@ namespace JS_Linter_Console
             }
 
             return output;
+        }
+
+        private static void Log(string message)
+        {
+            try
+            {
+                File.AppendAllText(LogFileName, $"{DateTime.UtcNow}: {message}\n");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred while logging: {ex.Message}");
+            }
         }
 
         private static LinterResult ParseLinterOutput(string rawOutput)
@@ -200,7 +228,6 @@ namespace JS_Linter_Console
                     }
                 }
             }
-
             return new LinterResult
             {
                 Output = output,
